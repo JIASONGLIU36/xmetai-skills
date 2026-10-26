@@ -37,7 +37,7 @@
 智能体跑的就是这一条：
 
 ```bash
-python skills/xmetai-evaluation/scripts/render_report.py <产物目录> --result reports/<名字>
+python skills/xmetai-datakit-skills/reporting/scripts/render_report.py <产物目录> --result reports/<名字>
 ```
 
 它从 `manifest.json` 自己认出能力（TS 系列 / 连续场），派发到对应模板，出图并写 `REPORT.md`。
@@ -63,22 +63,22 @@ python skills/xmetai-evaluation/scripts/render_report.py <产物目录> --result
 Python >= 3.10。在复制后的项目根目录运行：
 
 ```bash
-python -m pip install "./skills/xmetai-evaluation"
+python -m pip install "./skills/xmetai-datakit-skills/reporting"
 # 空间取数（Zarr / NetCDF）和台风地图：
-python -m pip install "./skills/xmetai-evaluation[all]"
+python -m pip install "./skills/xmetai-datakit-skills/reporting[all]"
 ```
 
 仅生成普通报告不必安装 `all`；空间取数可单独安装 `spatial` extra，
 台风地图可单独安装 `typhoon` extra。依赖版本由
 [`pyproject.toml`](./xmetai-evaluation/pyproject.toml) 声明。
 这些命令不安装 `xmetai-datakit`。
-入口脚本优先加载同目录附带的 `xmetai_evaluation/`，不依赖当前工作目录或仓库标记。
+入口脚本优先加载同目录附带的 `scripts/reporting/`，不依赖当前工作目录或仓库标记。
 复制到 `.claude/skills/` 或其他位置后，将命令中的路径换成实际路径即可。
 
 独立性测试（在已安装 `test` extra 的环境中）：
 
 ```bash
-python -m pytest -c skills/xmetai-evaluation/pyproject.toml skills/xmetai-evaluation/tests
+python -m pytest -c skills/xmetai-datakit-skills/reporting/pyproject.toml skills/xmetai-datakit-skills/reporting/tests
 ```
 
 测试会复制 skill 到临时目录，阻止导入原仓库包，检查全部脚本和报告生成。
@@ -89,10 +89,10 @@ Claude Code 认的是**目录形式**：`.claude/skills/<name>/SKILL.md`。
 本仓库用**复制**（不是符号链接——Windows 建符号链接要管理员或开发者模式）：
 
 ```bash
-rm -rf .claude/skills/xmetai-evaluation
-mkdir -p .claude/skills/xmetai-evaluation
-cp -r skills/xmetai-evaluation/. .claude/skills/xmetai-evaluation/
-diff -rq skills/xmetai-evaluation/ .claude/skills/xmetai-evaluation/   # 应当无输出
+rm -rf .claude/skills/xmetai-datakit-skills/reporting
+mkdir -p .claude/skills/xmetai-datakit-skills/reporting
+cp -r skills/xmetai-datakit-skills/reporting/. .claude/skills/xmetai-datakit-skills/reporting/
+diff -rq skills/xmetai-datakit-skills/reporting/ .claude/skills/xmetai-datakit-skills/reporting/   # 应当无输出
 ```
 
 > **改完源文件要重新复制**。`skills/` 下的是源，`.claude/skills/` 下的是副本，
@@ -115,45 +115,29 @@ skill 会按 `description` 里的触发词被自动选中；也可以用 `/xmeta
 
 ```
 skills/
-├── README.md                    # 本文件（Skills 索引）
-└── xmetai-evaluation/            # 模型评估 skill
-    ├── SKILL.md                 # Skill 主定义：什么时候用、怎么用、硬性规则
-    ├── pyproject.toml           # 独立安装及依赖声明
-    ├── xmetai_evaluation/       # 自包含运行库，内部导入不再引用 datakit / pipelines
-    │   ├── reporting/          # 完整报告生成逻辑的副本
-    │   ├── evaluation/         # 报告与 ERA5 取数需要的契约、指标和适配器副本
-    │   ├── io/                 # ERA5 布局声明
-    │   └── schema/             # 语义契约
-    ├── tests/                  # 脱离原仓库的回归测试
-    ├── scripts/
-    │   ├── render_report.py   # 产物目录 → 图表 + REPORT.md（认能力 + 派发）
-    │   ├── render_det_report.py    # 批次归档（单成员）→ 多模型对比图 + REPORT.md
-    │   ├── render_ens_report.py    # 批次归档（集合）→ 同上，另加 CRPS/Spread
-    │   ├── render_wave_report.py   # legacy：谱检验补充（球谐带已并入上两份报告）
-    │   ├── render_rainstorm_summary.py      # 43 个过程 × 2 口径 × N 模型 → 挑过程总表（CSV + 宽表）
-    │   ├── render_rainstorm_report.py  # 暴雨过程个例产物根 → 多模型对比报告（按过程分节）
-    │   ├── _spatial_common.py               # 两个空间分布取数脚本共用的常量 / 坐标归一 / ERA5
-    │   ├── extract_spatial_distribution.py      # 确定性档案 + ERA5 → 月平均宽表 CSV（服务器）
-    │   ├── extract_spatial_distribution_ens.py  # 集合档案 member_NNN/ + ERA5 → 含 spread 的宽表 CSV
-    │   └── render_spatial_distribution.py       # 宽表 CSV → 三行（确定性）/ 四行（集合）SVG（本地）
-    ├── assets/
-    │   └── templates/           # 报告格式契约（按能力家族一份，名字按 config 命名）
-    │       ├── weather_ts_single.md    # 确定性降水检验：一份多模型对比骨架（单模型 = N=1 退化）
-    │       ├── weather_ts_ens.md       # 集合降水检验：同上，§3 多 AROC/BS/BSS 三行、另加 §4.7 概率评分
-    │       ├── weather_rmse_single.md  # RMSE 批次家族（单成员）：纬向 FFT、球谐带（§4.5）、空间分布（§4.6）
-    │       ├── weather_rmse_ens.md     # RMSE 批次家族（集合）：CRPS / Spread、空间分布（§4.6）、球谐带（§4.8）
-    │       ├── weather_typhoon_single.md  # 台风路径/强度（确定性 / 集合平均共用）
-    │       └── rainstorm_case.md          # 暴雨过程个例：双口径 × 多模型，按过程分节
-    ├── references/              # 参考文档（口径与判读规则）
-    │   ├── evaluation-metrics.md        # 指标词典：是什么（不判好坏）
-    │   ├── precipitation-evaluation.md  # TS 系列：口径与产出契约
-    │   ├── diagnostic-rules.md          # TS 系列判读规则
-    │   ├── field-evaluation.md          # 连续场判读规则
-    │   ├── rmse-batch-evaluation.md     # RMSE 批次家族（single/ens/wave）
-    │   ├── typhoon-report-workflow.md   # 台风报告工作流与验收
-    │   ├── typhoon-verification.md      # 台风字段、集合定义与统计口径
-    │   └── model-diff-analysis.md       # 模型差异归因：改动起没起作用
-    └── agents/                  # 空。暂无子 agent
+├── README.md                        # 本文件（Skills 索引）
+└── xmetai-datakit-skills/           # datakit 技能族容器
+    └── reporting/                   # 评测结果 → 图表 + REPORT.md
+        ├── SKILL.md                 # 触发词、输入契约、能力路由、硬性规则
+        ├── README.md                # 本文件
+        ├── pyproject.toml           # 独立安装及依赖声明
+        ├── agents/                  # openai.yaml（Codex 元数据）
+        ├── assets/templates/        # 6 份报告格式契约
+        ├── references/              # 9 篇口径与判读规则
+        └── scripts/
+            ├── _bootstrap.py        # 免安装：把 scripts/ 插进 sys.path
+            ├── _spatial_common.py
+            ├── render_report.py     # 统一入口：认能力 + 派发
+            ├── render_det_report.py / render_ens_report.py / render_wave_report.py
+            ├── render_rainstorm_report.py / render_rainstorm_summary.py
+            ├── render_spatial_distribution.py
+            ├── extract_spatial_distribution.py / extract_spatial_distribution_ens.py
+            └── reporting/           # 运行库
+                ├── dispatch.py      # 能力识别 + 派发
+                ├── core/            # 样式 / 表格 / writer / 语义
+                ├── sources/         # 契约 / ERA5 / 布局 / 台风几何
+                ├── spectra/         # 指标基类 / 球谐带
+                └── reports/         # TS / 连续场 / RMSE / 暴雨 / 台风 / 空间
 ```
 
 ---
@@ -181,13 +165,13 @@ skills/
 
 ### 2. `scripts/` 只放入口，渲染逻辑放随附运行库
 `scripts/render_report.py` 是 skill 的入口——解析参数、插 `sys.path`、
-调 `xmetai_evaluation.reporting.report.build_report`、打印产物清单，**仅此而已**。
+调 `reporting.dispatch.build_report`、打印产物清单，**仅此而已**。
 
-- **认能力、选模板、出图、写报告的逻辑在 skill 内**（`xmetai-evaluation/xmetai_evaluation/reporting/`）：
+- **认能力、选模板、出图、写报告的逻辑在 skill 内**（`scripts/reporting/`）：
   那里能被 `pytest` 覆盖、能 import、能复用。入口脚本一旦开始有判断逻辑，
   就会与运行库里的判断产生分歧；
 - 入口脚本存在的理由是**免安装**：包没 `pip install -e .` 也能直接
-  `python skills/xmetai-evaluation/scripts/<脚本>.py`——脚本自己在
+  `python skills/xmetai-datakit-skills/reporting/scripts/<脚本>.py`——脚本自己在
   `_bootstrap.py` 里把 skill 自身目录插进 `sys.path`；
 - `references/*.md` 是代码的**散文镜像**，每篇都声明"以代码为准"。
 - 本次按副本拆分：主仓库原实现不变。以后同步修复时须显式更新副本并运行独立性测试，
@@ -221,7 +205,7 @@ skills/
 ### 5. 一个 Skill = 一个领域，能力靠路由区分
 - `xmetai-evaluation`：**所有**评测相关能力，不要为每条流程建一个 skill；
 - 新增能力时扩 `description` 的触发词 + 加一篇 `references/*.md`，
-  再加一条路由判据（见 `xmetai-evaluation/xmetai_evaluation/reporting/report.py` 的
+  再加一条路由判据（见 `scripts/reporting/dispatch.py` 的
   `IMPLEMENTED` / `_FALLBACK_RULES`）。
 
 ---
@@ -424,7 +408,7 @@ skills/
     **三方共同日期为 0**，所以本轮只用 FuXi↔AIFS 的 27 天验证渲染器，
     正式三方报告等 FGVP 数据补齐
 
-- **2026-09-21**: 三份 RMSE 骨架改版 + 文档按 `xmetai_evaluation/` 实况同步
+- **2026-09-21**: 三份 RMSE 骨架改版 + 文档按 `scripts/xmetai_evaluation/` 实况同步
   - **骨架改版**（`weather_rmse_single.md` / `_ens.md` / `_wave.md`）：
     编号契约第一次写明确——正文与必出附录 `图 N：`（`_single` 必出 1–4、
     `_ens` 必出 1–6、`_wave` 必出 1–7，其余按数据可得性出、**出不了就保留节位
@@ -446,7 +430,7 @@ skills/
     三个入口脚本的 docstring 同步。作废的东西统一登记在文首那条 ⚠️ 里
   - **三处作废说法**（旧文档写于另一个仓库布局，本仓库里没有对应物）：
     `vfc/regr_ens.py` / `vfc/regr_summary.py` / `vfc/regr_pair.py` 全不存在
-    （只有 `xmetai_evaluation/`）；`--summarize-det` / `--summarize-ens`
+    （只有 `scripts/xmetai_evaluation/`）；`--summarize-det` / `--summarize-ens`
     两个开关不存在；「批次归档 = `summary.csv` + `batch_meta.json` +
     `<YYYYMMDD>/`、没有 `manifest.json`」不成立——产物就是标准评估产物目录
     （`scores.csv` + `manifest.json` + `diagnostics/`），`pipeline` 也正是
@@ -768,7 +752,7 @@ skills/
     口径 A（逐日 24h）一天一个 08–08 窗、基准率随每日实况浮动；
     口径 B（过程累积）一根预报累加整段、基准率显著更高。实测 202503 的
     ≥25mm TS：日均 0.210 vs 过程累积 0.313
-  - **过程编目收敛到一份真值**：新增 `xmetai_evaluation/rainstorm_catalog.py`
+  - **过程编目收敛到一份真值**：新增 `scripts/reporting/reports/rainstorm_catalog.py`
     （43 条：编号 → 起止 / 等级）。此前配置 `rainstorm_ts_single_fuxi.py`、
     `rainstorm_ts_single_fgvp_ctrl.py` 与 `render_rainstorm_summary.py` **各抄了一份
     46 行的过程表**，改一头另两头不会跟着动；现在三处都 `import` 编目模块，
@@ -926,14 +910,14 @@ skills/
     配套资源同步；两份旧骨架里的「图 2 三面板」「图 4 起缺席」两处过期图号说明
     改成按实际出图数顺延
 - **2026-10-23（报告栈整合）**:
-  - 将 `skills/visualization` 合并进 `xmetai_evaluation/reporting`；
+  - 将 `skills/visualization` 合并进 `scripts/xmetai_evaluation/reporting`；
     `xmetai_evaluation.*` 依赖全部转为 `datakit.*` / `xmetai_evaluation.reporting.*`。
   - `render_report.py` 成为唯一 agent 入口；台风参数（`--leads` / `--fixed-leads` /
     `--bootstrap` / `--seed` / `--small-cases` / `--small-storms` / `--forecast-type` /
     `--verify-legacy-members`）由 `build_report()` 全部透传。
   - 删除 `generate_typhoon_report.py` 与包级 `cli.py` / `__main__.py`；
     `python -m xmetai_evaluation.reporting` 不再支持。
-  - skill 目录更名为 `skills/xmetai-evaluation/`；`skills/README.md` 为唯一索引。
+  - skill 目录更名为 `skills/xmetai-datakit-skills/reporting/`；`skills/README.md` 为唯一索引。
   - 输入契约统一为标准产物目录：`manifest.json` + `diagnostics/categorical_wide.csv`
     或 `typhoon/`；扁平 `ts_*.csv + *_meta.json` 不再由统一入口支持。
   - `visualization` extra 增加 `cartopy>=0.20`、`basemap>=2.0`。
